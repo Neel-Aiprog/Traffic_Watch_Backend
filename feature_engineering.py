@@ -61,23 +61,22 @@ def add_temporal_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def _group_rare_corridors(df: pd.DataFrame, min_count: int = MIN_CORRIDOR_COUNT) -> pd.Series:
       # DEBUG: Print what we're working with
-      print(f"[DEBUG] _group_rare_corridors called with {len(df)} rows")
-      print(f"[DEBUG] Corridor values: {df['corridor'].tolist()}")
+
 
       # Skip rare corridor grouping during inference (small dataframes)
       if len(df) < 30:  # Heuristic: <30 rows = likely inference/batch
-          print(f"[DEBUG] Skipping grouping (inference mode), returning corridors as-is")
+
           result = df['corridor']
-          print(f"[DEBUG] Result: {result.tolist()}")
+
           return result
 
-      print(f"[DEBUG] Performing rare corridor grouping (training mode)")
+
       counts = df['corridor'].value_counts()
-      print(f"[DEBUG] Value counts: {counts.to_dict()}")
+
       rare = counts[counts < min_count].index
-      print(f"[DEBUG] Rare corridors: {list(rare)}")
+
       result = df['corridor'].apply(lambda c: 'other_corridor' if c in rare else c)
-      print(f"[DEBUG] Result: {result.tolist()}")
+
       return result
 
 
