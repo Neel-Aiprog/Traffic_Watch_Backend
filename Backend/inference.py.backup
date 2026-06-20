@@ -1,0 +1,130 @@
+"""
+inference.py — loads the trained ensemble ONCE and exposes a single
+predict_severity() function for the API layer to call.
+
+Models are loaded at module import time (i.e. once, when the FastAPI app
+starts), not per-request. This matters: loading a CatBoost/LightGBM/XGBoost
+model from disk takes tens of milliseconds, which is fine once at startup
+but would add real latency if done on every request.
+"""
+
+import json
+import numpy as np
+import pandas as pd
+import lightgbm as lgb
+import xgboost as xgb
+from catboost import CatBoostClassifier
+
+from feature_engineering import build_features, CATEGORICAL_FEATURES, ALL_FEATURE_COLS
+
+MODEL_DIR = "./"  # Model files are in the same directory
+
+# ── Load models once at import time ─────────────────────────────────────
+_lgb_model = lgb.Booster(model_file=f"{MODEL_DIR}/model_lgb_binary.txt")
+
+_xgb_model = xgb.XGBClassifier()
+_xgb_model.load_model(f"{MODEL_DIR}/model_xgb_binary.json")
+
+# XGBoost is strict about column ORDER matching training exactly (unlike
+# LightGBM/CatBoost, which matched by name and didn't error). Rather than
+# maintaining a second hardcoded column-order list that can silently drift
+# out of sync with feature_engineering_v2.ALL_FEATURE_COLS (which is what
+# caused this bug), read the true training-time order directly off the
+# saved model and use THAT as the single source of truth at inference time.
+TRAINED_FEATURE_ORDER = list(_xgb_model.get_booster().feature_names)
+
+_cb_model = CatBoostClassifier()
+_cb_model.load_model(f"{MODEL_DIR}/model_catboost_binary.cbm")
+
+with open(f"{MODEL_DIR}/label_encoder_classes_binary.json") as f:
+    _label_classes = json.load(f)  # e.g. ["routine", "high"] -- index 1 should be "high"
+
+with open(f"{MODEL_DIR}/thresholds.json") as f:
+    _thresholds = json.load(f)
+
+HIGH_THRESHOLD = _thresholds["high_threshold"]
+MEDIUM_THRESHOLD = _thresholds["medium_threshold"]
+
+assert _label_classes[1] == "high", (
+    f"Expected label_classes[1] == 'high', got {_label_classes}. "
+    f"Check label_encoder_classes_binary.json -- predict_proba()[:, 1] "
+    f"below assumes index 1 is the 'high' class."
+)
+
+
+def _build_single_row_features(event: dict) -> pd.DataFrame:
+    """
+    Build a 1-row feature DataFrame from a raw event dict, using the SAME
+    build_features() pipeline used during training, so feature handling
+    (corridor grouping, time bucketing, missing-value fills) stays
+    identical between training and inference.
+
+    `event` is expected to have raw fields like the original dataset:
+    event_cause, corridor, priority, requires_road_closure, veh_type,
+    start_datetime (ISO string) -- NOT pre-engineered features. This
+    avoids duplicating feature logic in two places that could drift apart.
+    """
+    df = pd.DataFrame([event])
+
+    # build_features() expects 'severity' to already exist (it's normally
+    # added by add_severity_target_binary at training time). At inference
+    # time we don't know the answer yet -- inject a placeholder column so
+    # the shared pipeline code runs unmodified, then drop it.
+    df["severity"] = "routine"  # placeholder, value is irrelevant and discarded below
+    df["start_datetime"] = pd.to_datetime(df["start_datetime"], errors="coerce", utc=True)
+
+    features = build_features(df)
+    features = features.drop(columns=["severity"])
+
+    for col in CATEGORICAL_FEATURES:
+        features[col] = features[col].astype("category")
+
+    # Reorder columns to EXACTLY match what the models were trained on
+    # (see TRAINED_FEATURE_ORDER comment above) -- this is what fixes the
+    # "feature_names mismatch" error from XGBoost.
+    return features[TRAINED_FEATURE_ORDER]
+
+
+def _ensemble_proba_high(X: pd.DataFrame) -> float:
+    """Average P(high) across the 3 models. Returns a single float."""
+    lgb_proba = _lgb_model.predict(X)  # lgb.Booster.predict returns P(class=1) directly for binary
+    xgb_proba = _xgb_model.predict_proba(X)[:, 1]
+    cb_proba = _cb_model.predict_proba(X)[:, 1]
+
+    individual = {
+        "lightgbm": float(lgb_proba[0]),
+        "xgboost": float(xgb_proba[0]),
+        "catboost": float(cb_proba[0]),
+    }
+    ensemble = float(np.mean([lgb_proba[0], xgb_proba[0], cb_proba[0]]))
+    return ensemble, individual
+
+
+def apply_tier(p_high: float) -> str:
+    if p_high >= HIGH_THRESHOLD:
+        return "HIGH"
+    elif p_high >= MEDIUM_THRESHOLD:
+        return "MEDIUM"
+    else:
+        return "ROUTINE"
+
+
+def predict_severity(event: dict) -> dict:
+    """
+    Main entry point. Takes a raw event dict, returns the prediction block
+    (tier, probability, individual model scores) ready to be merged into
+    the API response.
+    """
+    X = _build_single_row_features(event)
+    p_high, individual_scores = _ensemble_proba_high(X)
+    tier = apply_tier(p_high)
+
+    return {
+        "tier": tier,
+        "probability_high": round(p_high, 4),
+        "thresholds_used": {
+            "high_threshold": HIGH_THRESHOLD,
+            "medium_threshold": MEDIUM_THRESHOLD,
+        },
+        "individual_scores": {k: round(v, 4) for k, v in individual_scores.items()},
+    }

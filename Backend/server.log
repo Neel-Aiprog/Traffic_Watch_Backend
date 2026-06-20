@@ -1,0 +1,29 @@
+C:\Users\Smit\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\pymongo\uri_parser_shared.py:379: UserWarning: Unknown option: /?appname. Did you mean one of (appname, tz_aware, srvservicename) or maybe a camelCase version of one? Refer to docstring.
+  return get_validated_options(opts, warn)
+INFO:     Started server process [7208]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] only one usage of each socket address (protocol/network address/port) is normally permitted
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+[INFO] Looking up SRV records for _mongodb._tcp.cluster0.m3vrkzf.mongodb.net
+[INFO] Found 3 MongoDB hosts via SRV:
+  1. ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017
+  2. ac-zrjnau7-shard-00-01.m3vrkzf.mongodb.net:27017
+  3. ac-zrjnau7-shard-00-00.m3vrkzf.mongodb.net:27017
+[INFO] Attempting direct connection to ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017
+[FAILED] Direct connection to first host: SSL handshake failed: ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_E...
+[INFO] Attempting direct connection to ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017 (attempt 1/3)
+[FAILED] Direct connection to ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017: SSL handshake failed: ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_E...
+[INFO] Attempting direct connection to ac-zrjnau7-shard-00-01.m3vrkzf.mongodb.net:27017 (attempt 2/3)
+[FAILED] Direct connection to ac-zrjnau7-shard-00-01.m3vrkzf.mongodb.net:27017: SSL handshake failed: ac-zrjnau7-shard-00-01.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_E...
+[INFO] Attempting direct connection to ac-zrjnau7-shard-00-00.m3vrkzf.mongodb.net:27017 (attempt 3/3)
+[FAILED] Direct connection to ac-zrjnau7-shard-00-00.m3vrkzf.mongodb.net:27017: SSL handshake failed: ac-zrjnau7-shard-00-00.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_E...
+[INFO] Trying strategy: Standard TLS connection
+[FAILED] Standard TLS connection: SSL handshake failed: ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_E...
+[INFO] Trying strategy: TLS with relaxed validation
+[FAILED] TLS with relaxed validation: SSL handshake failed: ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_E...
+[INFO] Trying strategy: Extended timeouts
+[FAILED] Extended timeouts: SSL handshake failed: ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_E...
+[ERROR] Failed to connect to MongoDB: SSL handshake failed: ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1081) (configured timeouts: socketTimeoutMS: 30000.0ms, connectTimeoutMS: 30000.0ms),SSL handshake failed: ac-zrjnau7-shard-00-00.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1081) (configured timeouts: socketTimeoutMS: 30000.0ms, connectTimeoutMS: 30000.0ms),SSL handshake failed: ac-zrjnau7-shard-00-01.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1081) (configured timeouts: socketTimeoutMS: 30000.0ms, connectTimeoutMS: 30000.0ms), Timeout: 60.0s, Topology Description: <TopologyDescription id: 6a350f734bd46563b53748ca, topology_type: ReplicaSetNoPrimary, servers: [<ServerDescription ('ac-zrjnau7-shard-00-00.m3vrkzf.mongodb.net', 27017) server_type: Unknown, rtt: None, error=AutoReconnect('SSL handshake failed: ac-zrjnau7-shard-00-00.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1081) (configured timeouts: socketTimeoutMS: 30000.0ms, connectTimeoutMS: 30000.0ms)')>, <ServerDescription ('ac-zrjnau7-shard-00-01.m3vrkzf.mongodb.net', 27017) server_type: Unknown, rtt: None, error=AutoReconnect('SSL handshake failed: ac-zrjnau7-shard-00-01.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1081) (configured timeouts: socketTimeoutMS: 30000.0ms, connectTimeoutMS: 30000.0ms)')>, <ServerDescription ('ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net', 27017) server_type: Unknown, rtt: None, error=AutoReconnect('SSL handshake failed: ac-zrjnau7-shard-00-02.m3vrkzf.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1081) (configured timeouts: socketTimeoutMS: 30000.0ms, connectTimeoutMS: 30000.0ms)')>]>
+  Please set MONGODB_CONNECTION_STRING in your .env file
