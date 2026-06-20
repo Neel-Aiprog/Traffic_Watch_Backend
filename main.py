@@ -126,7 +126,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[""],  # In production, replace with specific frontend origin
+    allow_origins=["https://traffic-watch-frontend.vercel.app/"],  # In production, replace with specific frontend origin
     allow_methods=["*"],
     allow_headers=["*"],
 )
