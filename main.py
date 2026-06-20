@@ -16,7 +16,7 @@ import os
 import time
 from typing import Optional
 from datetime import datetime
-
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from inference import predict_severity
 from recommendation import get_recommendation
 from sqlite_auth import get_auth_manager, init_default_users
-
+load_dotenv()
 # Initialize SQLite auth manager
 try:
     auth_manager = get_auth_manager()
@@ -126,7 +126,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://traffic-watch-frontend.vercel.app/"],  # In production, replace with specific frontend origin
+    allow_origins=[os.getenv("FRONT_END_URL")],
     allow_methods=["*"],
     allow_headers=["*"],
 )
