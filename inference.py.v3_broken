@@ -7,7 +7,14 @@ starts), not per-request. This matters: loading a CatBoost/LightGBM/XGBoost
 model from disk takes tens of milliseconds, which is fine once at startup
 but would add real latency if done on every request.
 
-v3.0 changes (adapted for native models):
+v3.0 changes:
+  - Models now loaded from .joblib (CalibratedClassifierCV wrappers) instead
+    of native formats (.txt / .json / .cbm). Calibration is baked in —
+    predict_proba() returns calibrated probabilities directly, so the manual
+    piecewise linear _calibrate_probability() block has been removed.
+  - TRAINED_FEATURE_ORDER extracted from the inner booster via
+    .estimator.get_booster().feature_names (CalibratedClassifierCV stores
+    the wrapped model under .estimator).
   - known_categories.json loaded at startup to remap unseen category values
     → NaN before XGBoost sees them (XGBoost hard-crashes on unknown
     categories; LightGBM/CatBoost handle them gracefully via missing-value
@@ -18,47 +25,44 @@ import os
 import json
 import numpy as np
 import pandas as pd
-import lightgbm as lgb
-import xgboost as xgb
-from catboost import CatBoostClassifier
+from joblib import load as joblib_load
 
 from feature_engineering import build_features, CATEGORICAL_FEATURES, ALL_FEATURE_COLS
 
 MODEL_DIR = "./"  # Model files are in the same directory
 
-# ── Load models once at import time (native formats) ─────────────────────
-_lgb_model = lgb.Booster(model_file=f"{MODEL_DIR}/model_lgb_binary.txt")
+# ── Load calibrated models once at import time ───────────────────────────────
+# Models are CalibratedClassifierCV wrappers (sklearn) saved with joblib.
+# predict_proba() on these already returns calibrated probabilities — no
+# post-hoc adjustment needed.
+_lgb_model = joblib_load(os.path.join(MODEL_DIR, "model_lgb_calibrated.joblib"))
+_xgb_model = joblib_load(os.path.join(MODEL_DIR, "model_xgb_calibrated.joblib"))
+_cb_model  = joblib_load(os.path.join(MODEL_DIR, "model_catboost_calibrated.joblib"))
 
-_xgb_model = xgb.XGBClassifier()
-_xgb_model.load_model(f"{MODEL_DIR}/model_xgb_binary.json")
-
-_cb_model = CatBoostClassifier()
-_cb_model.load_model(f"{MODEL_DIR}/model_catboost_binary.cbm")
-
+# CalibratedClassifierCV stores the underlying trained model under .estimator.
 # XGBoost is strict about column ORDER matching training exactly (unlike
-# LightGBM/CatBoost, which matched by name and didn't error). Rather than
-# maintaining a second hardcoded column-order list that can silently drift
-# out of sync with feature_engineering_v2.ALL_FEATURE_COLS (which is what
-# caused this bug), read the true training-time order directly off the
-# saved model and use THAT as the single source of truth at inference time.
-TRAINED_FEATURE_ORDER = list(_xgb_model.get_booster().feature_names)
+# LightGBM/CatBoost which match by name). Read the true training-time order
+# directly off the saved booster so this never drifts out of sync.
+TRAINED_FEATURE_ORDER = list(
+    _xgb_model.estimator.get_booster().feature_names
+)
 
-with open(f"{MODEL_DIR}/label_encoder_classes_binary.json") as f:
-    _label_classes = json.load(f)  # e.g. ["routine", "high"] -- index 1 should be "high"
+with open(os.path.join(MODEL_DIR, "label_encoder_classes_binary.json")) as f:
+    _label_classes = json.load(f)  # e.g. ["routine", "high"] — index 1 must be "high"
 
-with open(f"{MODEL_DIR}/thresholds.json") as f:
+with open(os.path.join(MODEL_DIR, "thresholds.json")) as f:
     _thresholds = json.load(f)
 
-HIGH_THRESHOLD = _thresholds["high_threshold"]
+HIGH_THRESHOLD   = _thresholds["high_threshold"]
 MEDIUM_THRESHOLD = _thresholds["medium_threshold"]
 
 assert _label_classes[1] == "high", (
     f"Expected label_classes[1] == 'high', got {_label_classes}. "
-    f"Check label_encoder_classes_binary.json -- predict_proba()[:, 1] "
-    f"below assumes index 1 is the 'high' class."
+    f"Check label_encoder_classes_binary.json — predict_proba()[:, 1] "
+    f"assumes index 1 is the 'high' class."
 )
 
-# ── Load known training categories once at startup ───────────────────────
+# ── Load known training categories once at startup ───────────────────────────
 # Generated at training time and saved as known_categories.json.
 # XGBoost hard-crashes on any category value it didn't see during training.
 # LightGBM and CatBoost handle this gracefully (NaN → missing-value branch),
@@ -90,7 +94,8 @@ else:
     )
 
 
-# ── Category safety ──────────────────────────────────────────────────────
+# ── Category safety ──────────────────────────────────────────────────────────
+
 def _remap_unseen_categories(features: pd.DataFrame) -> pd.DataFrame:
     """
     Remap any category value not seen during training → NaN.
@@ -116,24 +121,12 @@ def _remap_unseen_categories(features: pd.DataFrame) -> pd.DataFrame:
             # Cast to object first — pandas rejects NaN assignment into a
             # Categorical series that doesn't list NaN as a valid level.
             features[col] = features[col].astype(object).where(~mask, other=np.nan)
-            # If the entire column is NaN (unlikely but possible), fill with a known category
-            # to avoid XGBoost error on empty categories.
-            if features[col].isna().all():
-                # Prefer 'unknown' if it exists in known_vals, otherwise use the first known category.
-                if 'unknown' in known_vals:
-                    default_val = 'unknown'
-                else:
-                    default_val = known_vals[0] if known_vals else None
-                if default_val is not None:
-                    features[col] = features[col].fillna(default_val)
-                else:
-                    # Fallback if no known values (should not happen)
-                    features[col] = features[col].fillna("unknown")
             features[col] = features[col].astype("category")
     return features
 
 
-# ── Feature construction ─────────────────────────────────────────────────
+# ── Feature construction ─────────────────────────────────────────────────────
+
 def _build_single_row_features(event: dict) -> pd.DataFrame:
     """
     Build a 1-row feature DataFrame from a raw event dict using the SAME
@@ -167,17 +160,17 @@ def _build_single_row_features(event: dict) -> pd.DataFrame:
     return features[TRAINED_FEATURE_ORDER]
 
 
-# ── Ensemble prediction ──────────────────────────────────────────────────
+# ── Ensemble prediction ──────────────────────────────────────────────────────
+
 def _ensemble_proba_high(X: pd.DataFrame) -> tuple[float, dict]:
     """
     Average P(high) across the 3 calibrated models.
     Returns (ensemble_probability, individual_scores).
 
-    All three models are wrappers — predict_proba() returns probabilities.
-    For LightGBM Booster, predict returns P(class=1) directly for binary.
-    For XGBoost and CatBoost, predict_proba()[:, 1] gives P(class=1).
+    All three models are CalibratedClassifierCV wrappers — predict_proba()
+    already returns calibrated probabilities, so no further adjustment needed.
     """
-    lgb_proba = _lgb_model.predict(X)  # lgb.Booster.predict returns P(class=1) directly for binary
+    lgb_proba = _lgb_model.predict_proba(X)[:, 1]
     xgb_proba = _xgb_model.predict_proba(X)[:, 1]
     cb_proba  = _cb_model.predict_proba(X)[:, 1]
 
@@ -190,7 +183,8 @@ def _ensemble_proba_high(X: pd.DataFrame) -> tuple[float, dict]:
     return ensemble, individual
 
 
-# ── Tier assignment ──────────────────────────────────────────────────────
+# ── Tier assignment ──────────────────────────────────────────────────────────
+
 def apply_tier(p_high: float) -> str:
     if p_high >= HIGH_THRESHOLD:
         return "HIGH"
@@ -200,7 +194,8 @@ def apply_tier(p_high: float) -> str:
         return "ROUTINE"
 
 
-# ── Public API ───────────────────────────────────────────────────────────
+# ── Public API ───────────────────────────────────────────────────────────────
+
 def predict_severity(event: dict) -> dict:
     """
     Main entry point. Takes a raw event dict, returns the prediction block

@@ -1,0 +1,1 @@
+Fixed inference.py to handle unseen categories. Known categories loaded from known_categories.json. Tested with unseen categories and they are mapped appropriately.

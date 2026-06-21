@@ -1,0 +1,71 @@
+{
+  "event_cause": [
+    "accident",
+    "congestion",
+    "construction",
+    "debris",
+    "fog / low visibility",
+    "others",
+    "pot_holes",
+    "procession",
+    "protest",
+    "public_event",
+    "road_conditions",
+    "test_demo",
+    "tree_fall",
+    "vehicle_breakdown",
+    "vip_movement",
+    "water_logging"
+  ],
+  "corridor_grouped": [
+    "Bannerghata Road",
+    "Bellary Road 1",
+    "Bellary Road 2",
+    "Hosur Road",
+    "Magadi Road",
+    "Mysore Road",
+    "Non-corridor",
+    "ORR East 1",
+    "ORR East 2",
+    "ORR North 1",
+    "ORR North 2",
+    "ORR West 1",
+    "Old Madras Road",
+    "Tumkur Road",
+    "West of Chord Road",
+    "other_corridor"
+  ],
+  "priority": [
+    "High",
+    "Low"
+  ],
+  "veh_type": [
+    "auto",
+    "bmtc_bus",
+    "heavy_vehicle",
+    "ksrtc_bus",
+    "lcv",
+    "others",
+    "private_bus",
+    "private_car",
+    "taxi",
+    "truck",
+    "unknown"
+  ],
+  "day_of_week": [
+    "Friday",
+    "Monday",
+    "Saturday",
+    "Sunday",
+    "Thursday",
+    "Tuesday",
+    "Wednesday"
+  ],
+  "time_of_day": [
+    "daytime",
+    "early_morning",
+    "evening",
+    "late_night",
+    "night"
+  ]
+}
