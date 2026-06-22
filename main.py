@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-
+from explain import explain_prediction
 from inference import predict_severity
 from recommendation import get_recommendation
 from sqlite_auth import get_auth_manager, init_default_users
@@ -276,16 +276,26 @@ def predict(event: EventInput, current_user: dict = Depends(get_current_user)):
     try:
         prediction = predict_severity(event_dict)
     except Exception as e:
-        # Surface the real error during demo/debugging
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Inference failed: {str(e)}"
         )
 
+    # Extract and strip the internal feature row before building the response
+    feature_row = prediction.pop("_feature_row")
+
     recommendation = get_recommendation(
         prediction["tier"],
         event.corridor
     )
+
+    # Compute per-prediction SHAP explanation — runs fast on a single row
+    try:
+        explanation_factors = explain_prediction(event_dict, feature_row)
+    except Exception as e:
+        # Explanation failure must never take down the prediction response
+        print(f"[predict] Explanation failed (non-fatal): {e}")
+        explanation_factors = []
 
     return {
         "event_id": event.event_id or f"evt_{int(time.time())}",
@@ -306,6 +316,9 @@ def predict(event: EventInput, current_user: dict = Depends(get_current_user)):
         "recommendation": recommendation,
         "model_debug": {
             "individual_scores": prediction["individual_scores"],
+        },
+        "explanation": {
+            "factors": explanation_factors,
         },
     }
 

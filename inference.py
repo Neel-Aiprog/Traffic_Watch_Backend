@@ -219,4 +219,5 @@ def predict_severity(event: dict) -> dict:
             "medium_threshold": MEDIUM_THRESHOLD,
         },
         "individual_scores": {k: round(v, 4) for k, v in individual_scores.items()},
+        "_feature_row": X,  # passed to explainer, stripped before API response
     }
